@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pkg-info overwrite-permissions="true" relocatable="false" identifier="audio.existential.BlackHole2ch" postinstall-action="none" version="0.6.1" format-version="2" generator-version="InstallCmds-860 (24C101)" install-location="/Library/Audio/Plug-Ins/HAL" auth="root">
+    <payload numberOfFiles="27" installKBytes="241"/>
+    <bundle path="./BlackHole2ch.driver" id="audio.existential.BlackHole2ch" CFBundleShortVersionString="0.6.1" CFBundleVersion="596"/>
+    <bundle-version>
+        <bundle id="audio.existential.BlackHole2ch"/>
+    </bundle-version>
+    <upgrade-bundle>
+        <bundle id="audio.existential.BlackHole2ch"/>
+    </upgrade-bundle>
+    <update-bundle/>
+    <atomic-update-bundle/>
+    <strict-identifier/>
+    <relocate/>
+    <scripts>
+        <preinstall file="./preinstall" timeout="600"/>
+        <postinstall file="./postinstall" timeout="600"/>
+    </scripts>
+</pkg-info>

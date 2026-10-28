@@ -1,0 +1,6 @@
+.build/
+dist/
+.DS_Store
+*.log
+Phicomm-remote-photo.jpg
+driver/FeiXunV2ch.driver/
