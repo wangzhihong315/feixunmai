@@ -41,7 +41,7 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 
 ## 安装
 
-1. 从 [Releases](../../releases/latest) 下载 `斐讯麦安装包-0.3.0.pkg`（内含 斐讯麦.app + FeiXunV 2ch + BlackHole 2ch 两个虚拟声卡）；
+1. 从 [Releases](../../releases/latest) 下载 `FeiXunMai-0.3.0.pkg`（内含 斐讯麦.app + FeiXunV 2ch + BlackHole 2ch 两个虚拟声卡）；
 2. 安装包未做签名公证：右键点安装包选「打开」；若仍被拦，去「系统设置 → 隐私与安全性」放行；
 3. 允许「蓝牙」权限；
 4. 语音应用的麦克风设为 **“自动 / 跟随系统默认”**（不要固定选某个设备）；

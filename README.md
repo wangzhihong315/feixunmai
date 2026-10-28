@@ -39,7 +39,7 @@ The whole installer is about 300 KB and built entirely on Apple frameworks (Swif
 
 ## Install
 
-1. Download `斐讯麦安装包-0.3.0.pkg` from [Releases](../../releases/latest). It contains the app, the FeiXunV 2ch driver, and BlackHole 2ch.
+1. Download `FeiXunMai-0.3.0.pkg` from [Releases](../../releases/latest). It contains the app, the FeiXunV 2ch driver, and BlackHole 2ch.
 2. The package is not notarized. Right-click it and choose **Open**; if macOS still blocks it, allow it under System Settings → Privacy & Security.
 3. Grant Bluetooth permission.
 4. In your voice app, set the microphone to **Automatic / Follow system default** (do not pin a specific device).
@@ -48,7 +48,7 @@ The whole installer is about 300 KB and built entirely on Apple frameworks (Swif
 Build from source:
 
 ```zsh
-./scripts/build-app.sh   # produces dist/FeiXunMai.app, zip, dmg and the combined pkg
+./scripts/build-app.sh   # produces dist/斐讯麦.app, zip, dmg and the combined pkg
 ```
 
 ## How it works
