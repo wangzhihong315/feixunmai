@@ -6,7 +6,8 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 **一个语音键指挥 AI，几个实体键控制电脑**。
 
 整个安装包约 300 KB，纯苹果原生技术栈（Swift / AppKit / CoreBluetooth / AVFoundation），
-无任何第三方 Swift 依赖。
+无任何第三方 Swift 依赖。本项目深受 [无线麦 SayAll（remote-mic-app）](https://github.com/HD838A/remote-mic-app)
+启发，多项关键设计直接参考其公开文档与踩坑记录（见下方致谢）。
 
 ![截图占位](docs/按键设计.md)
 
@@ -85,5 +86,21 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
   FeiXunV 2ch / BlackHole 2ch 虚拟声卡基于其 v0.7.1 修改，遵循 **GPL-3.0**，
   修改后源码见 [driver/BlackHole-0.7.1](driver/BlackHole-0.7.1/)；
 - [google/libsbc](https://github.com/google/libsbc)：mSBC 解码（Apache-2.0）；
-- [HD838A/remote-mic-app](https://github.com/HD838A/remote-mic-app)：架构参考与
-  大量踩坑经验的来源（HID 布防-拦截、语音门槛、排障思路）。
+### 特别致谢：[无线麦 SayAll（HD838A/remote-mic-app）](https://github.com/HD838A/remote-mic-app)
+
+本项目从立项到实现都受益于该项目的公开资料，包括但不限于：
+
+- **立项灵感**："把蓝牙语音遥控器变成 Mac 的 vibe coding 语音入口"这一产品形态
+  与其能力矩阵（遥控器 × 输入工具收音模式对照）直接来自该项目的公开文档；
+- **HID 布防-拦截架构**：本项目的按键拦截移植自其
+  `KeyboardEventSuppressor` 的 arm-then-suppress 设计，解决了
+  "遥控器按键与真键盘同键码冲突"的问题；
+- **语音触发时序**："触发键跟随音频流而非按键事件、结束等排空（draining）"
+  的设计来自其 `VoiceFnTapSessionController`；
+- **音频接线顺序与虚拟设备可听性修复**：`AudioOutput` 的
+  "只连 player→mixer、先选设备再启动"是本项目音频静音问题的解药；
+- **踩坑地图**：其 Bugs/ 目录的 343 条记录帮助我们提前规避了
+  虚拟音频阻止休眠、音频通道假活、HID 客户端生命周期等多类问题，
+  并提示了豆包需要专属 USB transport 虚拟声卡的方向。
+
+如果本项目对你有用，也请给 [无线麦 SayAll](https://github.com/HD838A/remote-mic-app) 一个 Star。
