@@ -65,7 +65,7 @@ if '<license' not in s:
 open('/tmp/distribution.dist', 'w').write(s)
 PYEOF
 mkdir -p /tmp/pkgpath
-cp vendor/BlackHole2ch-driver.pkg /tmp/feixunmai-core.pkg /tmp/pkgpath/
+cp vendor/BlackHole2ch-driver.pkg vendor/FeiXunV2ch-driver.pkg /tmp/feixunmai-core.pkg /tmp/pkgpath/
 cp vendor/BlackHole-full/Resources/LICENSE /tmp/pkgpath/BlackHole-LICENSE.txt
 productbuild --distribution /tmp/distribution.dist --package-path /tmp/pkgpath \
   "dist/斐讯麦安装包-$VERSION.pkg" >/dev/null
