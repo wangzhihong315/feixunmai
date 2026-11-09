@@ -4,7 +4,7 @@
 
 Turn a **Feixun T1/N1 Bluetooth voice remote** (RTL_618) into a wireless microphone and air mouse for the Mac — the same idea as [Wireless Mic SayAll](https://github.com/HD838A/remote-mic-app) and OpenAI × Work Louder's [Codex Micro](https://worklouder.cc/codex-micro): one push-to-talk key to drive an AI assistant, a handful of physical keys to drive the computer.
 
-The whole installer is about 300 KB and built entirely on Apple frameworks (Swift / AppKit / CoreBluetooth / AVFoundation), with no third-party Swift dependencies. The project owes a lot to remote-mic-app's public notes — see [Acknowledgements](#acknowledgements).
+The app is about 1.5 MB and built entirely on Apple frameworks (Swift / AppKit / CoreBluetooth / AVFoundation), with no third-party Swift dependencies. The project owes a lot to remote-mic-app's public notes — see [Acknowledgements](#acknowledgements).
 
 ![FeiXunMai settings window](docs/screenshot.png)
 
@@ -129,6 +129,66 @@ No network access, no uploads. Audio is decoded and routed locally; statistics s
 
 **Special thanks to [Wireless Mic SayAll (HD838A/remote-mic-app)](https://github.com/HD838A/remote-mic-app).** The product idea, the arm-then-suppress HID architecture, the "trigger follows the audio stream, not the key event" timing, the audio wiring order that fixed our silent virtual mic, and much of the debugging map came from its public documentation and its 343-entry bug archive. If this project helps you, give SayAll a star too.
 
+
+## Install and first run
+
+1. Install VibeDeck: unzip / mount the dmg, drag `VibeDeck.app` into Applications.
+2. Install the virtual audio driver: double-click `FeiXunV2ch-driver.pkg` from the release, then run `sudo killall coreaudiod` (or reboot); `FeiXunV 2ch` should appear in System Settings → Sound.
+3. Launch VibeDeck and grant Accessibility (synthesized voice key + focus restore), Bluetooth, Microphone (diagnostics only) and Local Network (macOS 15+, Bonjour and capsule sync).
+4. Install VibePad: copy `VibePad-0.5.0.apk` to the phone (allow unknown sources) and grant Nearby devices / Microphone / Notifications.
+5. Pair `VibePad Trackpad` in system Bluetooth first, then open VibePad; choose Bluetooth or Wi-Fi for the voice link.
+6. Doubao: install the Doubao IME, enable it under Keyboard → Input Sources, grant microphone access, and keep VibeDeck's voice key on the default Right Option.
+
+## Known limitations and fixes
+
+**1. "Cannot verify the developer" on first launch**
+- Right-click `VibeDeck.app` → Open, or run `xattr -dr com.apple.quarantine /Applications/VibeDeck.app`.
+- The release is not notarized (no Apple Developer account); this is expected.
+
+**2. FeiXunV 2ch is missing**
+- Check `ls /Library/Audio/Plug-Ins/HAL/FeiXunV2ch.driver`;
+- run `sudo killall coreaudiod` or reboot;
+- fallback: BlackHole 2ch (`brew install blackhole-2ch`), but Doubao may filter it as a virtual device; FeiXunV's USB transport is what Doubao accepts reliably.
+
+**3. Doubao produces no text / capsules stay pending**
+- Doubao must be the current input source (selected in the menu bar) with microphone permission;
+- VibeDeck's voice key must match Doubao's (default Right Option; change it on the Voice page);
+- keep "switch system microphone during voice" enabled;
+- use "Transcribe now" on a capsule and watch the HUD at the top of the screen;
+- if still empty, hold "Hold to talk" on the phone to verify the voice path, then check whether Accessibility permission was revoked;
+- automatic transcription stops after 3 failed attempts to avoid stealing focus; retry manually after fixing Doubao.
+
+**4. Phone stuck on "voice waiting" / cannot connect**
+- Pair the HID device in system Bluetooth before opening the app;
+- MIUI: enable Autostart for VibePad, set battery saver to "No restrictions", keep the notification;
+- use only one voice transport at a time (Bluetooth or Wi-Fi), switch it in the phone settings;
+- the app relies on its foreground service; do not force-stop it.
+
+**5. Wi-Fi voice / capsule sync cannot connect**
+- phone and Mac must be on the same LAN with AP isolation disabled;
+- allow mDNS/Bonjour (UDP 5353) and TCP 59321;
+- allow VibeDeck through the macOS firewall; macOS 15 asks for Local Network access on first use;
+- the Mac must be awake; the phone reconnects automatically after wake.
+
+**6. MCP tools do not appear**
+- configure the absolute path from `docs/MCP-CLIENTS.md` and restart the client;
+- Claude Code / Codex / Qwen Code can use their built-in `mcp add`;
+- Qoder / DeepSeek Harness need a manual stdio entry in their settings; Cursor is not supported;
+- smoke test: `python3 -I scripts/test-mcp.py dist/VibeDeckMCP`.
+
+**7. Stats scope**
+- Stats count voice sessions only (phone push-to-talk, remote); capsule transcription and playback are not included;
+- values reset by date and stay on this Mac.
+
+**8. Three-finger gestures**
+- Not supported: MIUI claims three-finger touches for screenshots before the app sees them; the code and UI hint were removed.
+
+**9. APK install/upgrade**
+- The APK is self-signed; upgrading from a debug build or a differently signed build fails with a signature mismatch — uninstall first;
+- future builds use the same local release key (not committed).
+
+**10. Privacy**
+- Audio, transcripts and stats stay local; the MCP server only reads local files.
 
 ## Building from source
 

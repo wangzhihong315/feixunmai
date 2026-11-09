@@ -10,7 +10,7 @@
 OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的思路：
 **一个语音键指挥 AI，几个实体键控制电脑**。
 
-整个安装包约 300 KB，纯苹果原生技术栈（Swift / AppKit / CoreBluetooth / AVFoundation），
+安装包约 1.5 MB，纯苹果原生技术栈（Swift / AppKit / CoreBluetooth / AVFoundation），
 无任何第三方 Swift 依赖。本项目深受 [无线麦 SayAll（remote-mic-app）](https://github.com/HD838A/remote-mic-app)
 启发，多项关键设计直接参考其公开文档与踩坑记录（见下方致谢）。
 
@@ -156,6 +156,66 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 
 如果本项目对你有用，也请给 [无线麦 SayAll](https://github.com/HD838A/remote-mic-app) 一个 Star。
 
+
+## 安装与首次配置
+
+1. 安装 VibeDeck：解压 zip / 挂载 dmg，把 `VibeDeck.app` 拖进 Applications。
+2. 安装虚拟声卡：双击 Release 里的 `FeiXunV2ch-driver.pkg`，装完执行 `sudo killall coreaudiod`（或重启），在「系统设置 → 声音」里应能看到 `FeiXunV 2ch`。
+3. 打开 VibeDeck，按提示授予：辅助功能（合成语音键、恢复焦点）、蓝牙、麦克风（仅诊断自检需要）、本地网络（macOS 15+，Bonjour 与胶囊同步）。
+4. 安装 VibePad：把 `VibePad-0.5.0.apk` 传到手机安装（允许未知来源），授予附近设备 / 麦克风 / 通知权限。
+5. 配对：先在系统蓝牙里配对 `VibePad Trackpad`，再打开 VibePad；手机端语音链路选蓝牙或 Wi-Fi。
+6. 豆包：安装豆包输入法 → 系统设置 → 键盘 → 输入法中添加并切换到豆包 → 授权麦克风；VibeDeck 里语音键保持默认「右 Option」。
+
+## 已知限制与解决办法
+
+**1. 首次打开提示“无法验证开发者”**
+- 右键 `VibeDeck.app` → 打开；或 `xattr -dr com.apple.quarantine /Applications/VibeDeck.app`。
+- Release 未做 Apple 公证（没有开发者账号），属预期。
+
+**2. 声音设置里没有 FeiXunV 2ch**
+- 确认驱动已安装：`ls /Library/Audio/Plug-Ins/HAL/FeiXunV2ch.driver`；
+- 执行 `sudo killall coreaudiod` 或重启；
+- 仍没有：可临时用 BlackHole 2ch（`brew install blackhole-2ch`），但豆包可能把它当“虚拟设备”过滤，FeiXunV 的 USB transport 才能稳定被识别。
+
+**3. 豆包不出字 / 胶囊一直“待转写”**
+- 豆包输入法必须是当前输入法（菜单栏输入法选中豆包），且已授予麦克风；
+- VibeDeck 的语音键要和豆包语音键一致（默认右 Option，可在「语音」页改）；
+- 「语音时切换系统麦克风」保持开启；
+- 手动点胶囊上的「立即转写」，屏幕顶部会出现 HUD 小窗，观察是否出字；
+- 仍不出字：先按住手机「按住说话」验证语音链路（豆包应能出中文），再检查辅助功能权限是否被系统撤销；
+- 自动转写失败 3 次后会停止重试，避免反复抢焦点；处理完豆包后手动转写。
+
+**4. 手机端“语音等待”/ 连不上**
+- 先在系统蓝牙配对 HID，再打开 App；
+- 小米/红米：设置 → 应用 → VibePad → 自启动打开、省电策略“无限制”，通知常驻不要划掉；
+- 语音链路只保留一种：蓝牙或 Wi-Fi，在手机设置里切换；
+- App 依赖前台服务常驻，勿强行停止。
+
+**5. Wi-Fi 语音 / 胶囊同步连不上**
+- 手机与 Mac 必须在同一局域网，路由器关闭 AP 隔离；
+- 允许 mDNS/Bonjour（UDP 5353）与 TCP 59321；
+- macOS 防火墙放行 VibeDeck；macOS 15 首次会弹“本地网络”权限，必须允许；
+- Mac 睡眠时连不上，唤醒后手机端会自动重连，也可重开 App。
+
+**6. MCP 工具不出现**
+- 按 `docs/MCP-CLIENTS.md` 填绝对路径并重启客户端；
+- Claude Code / Codex / Qwen Code 可用自带 `mcp add`；
+- Qoder / DeepSeek Harness 在应用设置里手动加 stdio 命令；Cursor 未支持；
+- 自测：`python3 -I scripts/test-mcp.py dist/VibeDeckMCP`。
+
+**7. 统计口径**
+- 「统计」只统计语音会话次数和时长（手机按住说话、遥控器），不包含胶囊转写/回放；
+- 数据按日期自动重置，只存本机。
+
+**8. 三指手势**
+- 不支持：MIUI 会把三指触摸当截图手势拦截，App 收不到完整事件，相关代码和界面提示已移除。
+
+**9. APK 安装/升级**
+- APK 使用自签名证书；从旧 debug 包或别人签名的包升级会提示签名冲突，需先卸载再装；
+- 后续版本会用同一把发布密钥签名（密钥不进仓库）。
+
+**10. 隐私**
+- 录音、转写文本、统计都只在本机；MCP 只读本地目录，不上传。
 
 ## 从源码构建
 
