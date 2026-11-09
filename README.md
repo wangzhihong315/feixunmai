@@ -69,28 +69,25 @@ Measured voice-path facts:
   because changing the default input invalidates the old output binding — the engine
   keeps running with a live mixer level while the virtual device receives nothing.
 
-Diagnostics: all voice events go to `~/Library/Logs/VibeDeck.log`, and the “声音路由” card
-has “麦克风自检”, “回环自检 1kHz” and “录虚拟麦” buttons for checking each segment.
+Diagnostics: all voice events go to `~/Library/Logs/VibeDeck.log`; the developer buttons
+(“麦克风自检 / 回环自检 1kHz / 录虚拟麦”) are hidden by default — enable them with
+`defaults write com.feixun.mai showDiagnostics -bool true` and relaunch.
 
 ## Requirements
 
 - Mac with Apple Silicon or Intel, macOS 13 or later.
-- A Feixun T1/N1 original remote (HID + Kehwin service 1920).
-- Pairing: hold **Home + Volume Down** together, then connect from System Settings → Bluetooth.
+- An Android phone (Android 9+) with VibePad, or a Feixun T1/N1 original remote.
+- Wi-Fi voice and capsule sync need the phone and Mac on the same LAN (Bluetooth voice does not).
+- Remote pairing: hold **Home + Volume Down** together, then connect from System Settings → Bluetooth.
 
-## Install
+## Install and first run
 
-1. Download `FeiXunMai-0.3.0.pkg` from [Releases](../../releases/latest). It contains the app, the FeiXunV 2ch driver, and BlackHole 2ch.
-2. The package is not notarized. Right-click it and choose **Open**; if macOS still blocks it, allow it under System Settings → Privacy & Security.
-3. Grant Bluetooth permission.
-4. In your voice app, set the microphone to **Automatic / Follow system default** (do not pin a specific device).
-5. Hold the remote's voice key and talk. Grant Accessibility permission only if you use Fn emulation.
-
-Build from source:
-
-```zsh
-./scripts/build-app.sh   # produces dist/VibeDeck.app, zip, dmg and the combined pkg
-```
+1. Install VibeDeck: unzip / mount the dmg, drag `VibeDeck.app` into Applications.
+2. Install the virtual audio driver: double-click `FeiXunV2ch-driver.pkg` from the release, then run `sudo killall coreaudiod` (or reboot); `FeiXunV 2ch` should appear in System Settings → Sound.
+3. Launch VibeDeck and grant Accessibility (synthesized voice key + focus restore), Bluetooth, Microphone (diagnostics only) and Local Network (macOS 15+, Bonjour and capsule sync).
+4. Install VibePad: copy `VibePad-0.5.0.apk` to the phone (allow unknown sources) and grant Nearby devices / Microphone / Notifications.
+5. Pair `VibePad Trackpad` in system Bluetooth first, then open VibePad; choose Bluetooth or Wi-Fi for the voice link.
+6. Doubao: install the Doubao IME, enable it under Keyboard → Input Sources, grant microphone access, and keep VibeDeck's voice key on the default Right Option.
 
 ## How it works
 
@@ -104,40 +101,15 @@ other keys ─── HID report-layer "arm, then suppress": only the remote (VID
                 identical key codes from a real keyboard always pass through
 ```
 
+VibePad voice reuses the same decode → gate → key timing with BLE ADPCM or Wi-Fi PCM as the source.
+Capsule transcription reuses the same audio and key path, replaying a recorded WAV instead of live audio.
+
 More design notes and measurements live in [docs/](docs/):
 [key design](docs/按键设计.md) ·
 [remote capabilities](docs/遥控器能力摸底.md) ·
 [comparison](docs/对标梳理.md) ·
 [lessons learned](docs/经验教训.md) ·
 [HID verification plan](docs/HID验证计划.md)
-
-## Known limitations
-
-- While the voice key is held, Back/Home/Menu do not respond (the firmware pauses key reports during streaming; they recover on release).
-- If the remote stops responding, pull the battery and reinsert it — a known RTL_618 firmware issue.
-- Modifier triggers (⌘/⌥) can collide with app shortcuts; Fn is the safest default.
-
-## Privacy
-
-No network access, no uploads. Audio is decoded and routed locally; statistics stay in local UserDefaults.
-
-## License and acknowledgements
-
-- Project code: MIT — see [LICENSE](LICENSE).
-- [BlackHole](https://github.com/ExistentialAudio/BlackHole) by Existential Audio: FeiXunV 2ch and BlackHole 2ch are modified builds of v0.7.1, licensed **GPL-3.0**. Modified source is in [driver/BlackHole-0.7.1](driver/BlackHole-0.7.1/).
-- [google/libsbc](https://github.com/google/libsbc): mSBC decoding (Apache-2.0).
-
-**Special thanks to [Wireless Mic SayAll (HD838A/remote-mic-app)](https://github.com/HD838A/remote-mic-app).** The product idea, the arm-then-suppress HID architecture, the "trigger follows the audio stream, not the key event" timing, the audio wiring order that fixed our silent virtual mic, and much of the debugging map came from its public documentation and its 343-entry bug archive. If this project helps you, give SayAll a star too.
-
-
-## Install and first run
-
-1. Install VibeDeck: unzip / mount the dmg, drag `VibeDeck.app` into Applications.
-2. Install the virtual audio driver: double-click `FeiXunV2ch-driver.pkg` from the release, then run `sudo killall coreaudiod` (or reboot); `FeiXunV 2ch` should appear in System Settings → Sound.
-3. Launch VibeDeck and grant Accessibility (synthesized voice key + focus restore), Bluetooth, Microphone (diagnostics only) and Local Network (macOS 15+, Bonjour and capsule sync).
-4. Install VibePad: copy `VibePad-0.5.0.apk` to the phone (allow unknown sources) and grant Nearby devices / Microphone / Notifications.
-5. Pair `VibePad Trackpad` in system Bluetooth first, then open VibePad; choose Bluetooth or Wi-Fi for the voice link.
-6. Doubao: install the Doubao IME, enable it under Keyboard → Input Sources, grant microphone access, and keep VibeDeck's voice key on the default Right Option.
 
 ## Known limitations and fixes
 
@@ -187,8 +159,26 @@ No network access, no uploads. Audio is decoded and routed locally; statistics s
 - The APK is self-signed; upgrading from a debug build or a differently signed build fails with a signature mismatch — uninstall first;
 - future builds use the same local release key (not committed).
 
+**11. Remote firmware**
+- While the voice key is held, Back/Home/Menu do not respond (the firmware pauses key reports during streaming and recovers on release).
+- If the remote stops responding, pull the battery and reinsert it.
+- Modifier triggers (⌘/⌥) can collide with app shortcuts; Fn is the safest default.
+
 **10. Privacy**
 - Audio, transcripts and stats stay local; the MCP server only reads local files.
+
+## Privacy
+
+Voice and capsule sync stay on this Mac and the local network; nothing is uploaded. Settings and statistics live in local UserDefaults.
+
+## License and acknowledgements
+
+- Project code: MIT — see [LICENSE](LICENSE).
+- [BlackHole](https://github.com/ExistentialAudio/BlackHole) by Existential Audio: FeiXunV 2ch and BlackHole 2ch are modified builds of v0.7.1, licensed **GPL-3.0**. Modified source is in [driver/BlackHole-0.7.1](driver/BlackHole-0.7.1/).
+- [google/libsbc](https://github.com/google/libsbc): mSBC decoding (Apache-2.0).
+
+**Special thanks to [Wireless Mic SayAll (HD838A/remote-mic-app)](https://github.com/HD838A/remote-mic-app).** The product idea, the arm-then-suppress HID architecture, the "trigger follows the audio stream, not the key event" timing, the audio wiring order that fixed our silent virtual mic, and much of the debugging map came from its public documentation and its 343-entry bug archive. If this project helps you, give SayAll a star too.
+
 
 ## Building from source
 

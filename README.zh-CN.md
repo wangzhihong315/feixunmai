@@ -77,28 +77,23 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
   且切换后必须**重建 AudioSink**——切默认输入会让旧输出绑定失效，表现为
   "引擎 running、mixer 有电平，但虚拟声卡收不到"。
 
-诊断：Mac 端语音事件全部写入 `~/Library/Logs/VibeDeck.log`；界面「声音路由」卡片里有
-「麦克风自检」「回环自检 1kHz」「录虚拟麦」三个按钮，可逐段验证链路。
+诊断：Mac 端语音事件全部写入 `~/Library/Logs/VibeDeck.log`；开发用的「麦克风自检 / 回环自检 / 录虚拟麦」按钮默认隐藏，需要时执行 `defaults write com.feixun.mai showDiagnostics -bool true` 并重启 App。
 
 ## 硬件与系统要求
 
 - Mac（Apple Silicon / Intel），macOS 13+；
-- 斐讯 T1/N1 原装遥控器（`斐讯遥控器`，HID + Kehwin 1920 服务）；
-- 配对方式：同时长按 **主页 + 音量减**，在系统蓝牙里连接。
+- Android 手机（Android 9+）安装 VibePad；或者使用斐讯 T1/N1 原装遥控器；
+- 手机与 Mac 在同一局域网时可使用 Wi-Fi 语音与胶囊同步（蓝牙语音不需要网络）；
+- 遥控器配对：同时长按 **主页 + 音量减**，在系统蓝牙里连接。
 
-## 安装
+## 安装与首次配置
 
-1. 从 [Releases](../../releases/latest) 下载 `FeiXunMai-0.3.0.pkg`（内含 VibeDeck.app + FeiXunV 2ch + BlackHole 2ch 两个虚拟声卡）；
-2. 安装包未做签名公证：右键点安装包选「打开」；若仍被拦，去「系统设置 → 隐私与安全性」放行；
-3. 允许「蓝牙」权限；
-4. 语音应用的麦克风设为 **“自动 / 跟随系统默认”**（不要固定选某个设备）；
-5. 按住遥控器语音键说话即出字；需要 Fn 模拟时再授予「辅助功能」权限。
-
-构建（可选，从源码）：
-
-```zsh
-./scripts/build-app.sh    # 产出 dist/VibeDeck.app、zip、dmg 和总安装包 pkg
-```
+1. 安装 VibeDeck：解压 zip / 挂载 dmg，把 `VibeDeck.app` 拖进 Applications。
+2. 安装虚拟声卡：双击 Release 里的 `FeiXunV2ch-driver.pkg`，装完执行 `sudo killall coreaudiod`（或重启），在「系统设置 → 声音」里应能看到 `FeiXunV 2ch`。
+3. 打开 VibeDeck，按提示授予：辅助功能（合成语音键、恢复焦点）、蓝牙、麦克风（仅诊断自检需要）、本地网络（macOS 15+，Bonjour 与胶囊同步）。
+4. 安装 VibePad：把 `VibePad-0.5.0.apk` 传到手机安装（允许未知来源），授予附近设备 / 麦克风 / 通知权限。
+5. 配对：先在系统蓝牙里配对 `VibePad Trackpad`，再打开 VibePad；手机端语音链路选蓝牙或 Wi-Fi。
+6. 豆包：安装豆包输入法 → 系统设置 → 键盘 → 输入法中添加并切换到豆包 → 授权麦克风；VibeDeck 里语音键保持默认「右 Option」。
 
 ## 工作原理
 
@@ -112,59 +107,15 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
                 真键盘的同键码按键永远直通
 ```
 
+VibePad 的语音只是把同一套「解码 → 门槛 → 按键时序」换成 BLE ADPCM 或 Wi-Fi PCM 输入；
+闪念胶囊的自动转写复用同一条音频与按键链路，只是把手机实时音频换成录好的 WAV。
+
 更多设计与实测数据见 [docs/](docs/)：
 [按键设计](docs/按键设计.md) ·
 [遥控器能力摸底](docs/遥控器能力摸底.md) ·
 [对标梳理](docs/对标梳理.md) ·
 [经验教训](docs/经验教训.md) ·
 [HID 验证计划](docs/HID验证计划.md)
-
-## 已知限制
-
-- 按住语音键说话期间，返回/主页/菜单暂不响应（固件在推流时暂停消费键上报，松开即恢复）；
-- 遥控器固件偶发按键无响应时，扣电池重装即可恢复（RTL_618 固件已知问题）；
-- 语音触发键若使用修饰键（⌘/⌥）可能与目标应用快捷键冲突，默认 Fn 一般最稳。
-
-## 隐私
-
-不联网、不上传；语音只在本地解码转发，统计只存本机 UserDefaults。
-
-## 许可与致谢
-
-- 本项目代码：MIT（见 [LICENSE](LICENSE)）；
-- [BlackHole](https://github.com/ExistentialAudio/BlackHole)（Existential Audio）：
-  FeiXunV 2ch / BlackHole 2ch 虚拟声卡基于其 v0.7.1 修改，遵循 **GPL-3.0**，
-  修改后源码见 [driver/BlackHole-0.7.1](driver/BlackHole-0.7.1/)；
-- [google/libsbc](https://github.com/google/libsbc)：mSBC 解码（Apache-2.0）。
-
-### 特别致谢：[无线麦 SayAll（HD838A/remote-mic-app）](https://github.com/HD838A/remote-mic-app)
-
-本项目从立项到实现都受益于该项目的公开资料，包括但不限于：
-
-- **立项灵感**："把蓝牙语音遥控器变成 Mac 的 vibe coding 语音入口"这一产品形态
-  与其能力矩阵（遥控器 × 输入工具收音模式对照）直接来自该项目的公开文档；
-- **HID 布防-拦截架构**：本项目的按键拦截移植自其
-  `KeyboardEventSuppressor` 的 arm-then-suppress 设计，解决了
-  "遥控器按键与真键盘同键码冲突"的问题；
-- **语音触发时序**："触发键跟随音频流而非按键事件、结束等排空（draining）"
-  的设计来自其 `VoiceFnTapSessionController`；
-- **音频接线顺序与虚拟设备可听性修复**：`AudioOutput` 的
-  "只连 player→mixer、先选设备再启动"是本项目音频静音问题的解药；
-- **踩坑地图**：其 Bugs/ 目录的 343 条记录帮助我们提前规避了
-  虚拟音频阻止休眠、音频通道假活、HID 客户端生命周期等多类问题，
-  并提示了豆包需要专属 USB transport 虚拟声卡的方向。
-
-如果本项目对你有用，也请给 [无线麦 SayAll](https://github.com/HD838A/remote-mic-app) 一个 Star。
-
-
-## 安装与首次配置
-
-1. 安装 VibeDeck：解压 zip / 挂载 dmg，把 `VibeDeck.app` 拖进 Applications。
-2. 安装虚拟声卡：双击 Release 里的 `FeiXunV2ch-driver.pkg`，装完执行 `sudo killall coreaudiod`（或重启），在「系统设置 → 声音」里应能看到 `FeiXunV 2ch`。
-3. 打开 VibeDeck，按提示授予：辅助功能（合成语音键、恢复焦点）、蓝牙、麦克风（仅诊断自检需要）、本地网络（macOS 15+，Bonjour 与胶囊同步）。
-4. 安装 VibePad：把 `VibePad-0.5.0.apk` 传到手机安装（允许未知来源），授予附近设备 / 麦克风 / 通知权限。
-5. 配对：先在系统蓝牙里配对 `VibePad Trackpad`，再打开 VibePad；手机端语音链路选蓝牙或 Wi-Fi。
-6. 豆包：安装豆包输入法 → 系统设置 → 键盘 → 输入法中添加并切换到豆包 → 授权麦克风；VibeDeck 里语音键保持默认「右 Option」。
 
 ## 已知限制与解决办法
 
@@ -214,8 +165,45 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 - APK 使用自签名证书；从旧 debug 包或别人签名的包升级会提示签名冲突，需先卸载再装；
 - 后续版本会用同一把发布密钥签名（密钥不进仓库）。
 
+**11. 遥控器固件**
+- 按住语音键期间返回/主页/菜单暂不响应（固件在推流时暂停消费键上报，松开恢复）；
+- 遥控器偶发按键无响应时，扣电池重装即可；
+- 修饰键触发（⌘/⌥）可能与目标应用快捷键冲突，默认 Fn 最稳。
+
 **10. 隐私**
 - 录音、转写文本、统计都只在本机；MCP 只读本地目录，不上传。
+
+## 隐私
+
+语音与胶囊同步只在本机与局域网内传输，不上传云端；统计和设置只写入本机 UserDefaults。
+
+## 许可与致谢
+
+- 本项目代码：MIT（见 [LICENSE](LICENSE)）；
+- [BlackHole](https://github.com/ExistentialAudio/BlackHole)（Existential Audio）：
+  FeiXunV 2ch / BlackHole 2ch 虚拟声卡基于其 v0.7.1 修改，遵循 **GPL-3.0**，
+  修改后源码见 [driver/BlackHole-0.7.1](driver/BlackHole-0.7.1/)；
+- [google/libsbc](https://github.com/google/libsbc)：mSBC 解码（Apache-2.0）。
+
+### 特别致谢：[无线麦 SayAll（HD838A/remote-mic-app）](https://github.com/HD838A/remote-mic-app)
+
+本项目从立项到实现都受益于该项目的公开资料，包括但不限于：
+
+- **立项灵感**："把蓝牙语音遥控器变成 Mac 的 vibe coding 语音入口"这一产品形态
+  与其能力矩阵（遥控器 × 输入工具收音模式对照）直接来自该项目的公开文档；
+- **HID 布防-拦截架构**：本项目的按键拦截移植自其
+  `KeyboardEventSuppressor` 的 arm-then-suppress 设计，解决了
+  "遥控器按键与真键盘同键码冲突"的问题；
+- **语音触发时序**："触发键跟随音频流而非按键事件、结束等排空（draining）"
+  的设计来自其 `VoiceFnTapSessionController`；
+- **音频接线顺序与虚拟设备可听性修复**：`AudioOutput` 的
+  "只连 player→mixer、先选设备再启动"是本项目音频静音问题的解药；
+- **踩坑地图**：其 Bugs/ 目录的 343 条记录帮助我们提前规避了
+  虚拟音频阻止休眠、音频通道假活、HID 客户端生命周期等多类问题，
+  并提示了豆包需要专属 USB transport 虚拟声卡的方向。
+
+如果本项目对你有用，也请给 [无线麦 SayAll](https://github.com/HD838A/remote-mic-app) 一个 Star。
+
 
 ## 从源码构建
 
