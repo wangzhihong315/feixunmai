@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>VibeDeck · 按键 v2</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6e6e73;
+    --faint: #9a9aa2;
+    --line: rgba(30,42,60,.16);
+    --blue: #0a84ff;
+    --amber: #c93400;
+    --panel-top: #fbfcfe;
+    --panel-bottom: #eef1f6;
+  }
+  html, body {
+    margin: 0; background: #dfe3e9;
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "PingFang SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { display: grid; place-items: center; padding: 28px; }
+  .window {
+    width: 1100px; height: 1000px; border-radius: 12px; overflow: hidden;
+    display: flex; background: #f2f2f7; color: var(--ink);
+    box-shadow: 0 40px 120px rgba(20,30,50,.28);
+  }
+
+  aside {
+    width: 220px; flex: 0 0 220px; background: #f7f7fa;
+    border-right: 1px solid rgba(30,42,60,.08);
+    padding: 22px 14px; display: flex; flex-direction: column;
+  }
+  .brand { display: flex; gap: 10px; align-items: center; padding: 0 8px 22px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 11px;
+    background: #1c1c1e; display: grid; place-items: center;
+  }
+  .logo svg { width: 20px; height: 20px; }
+  .brand b { display: block; font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+  .brand span { font-size: 11px; color: var(--faint); }
+  nav { display: flex; flex-direction: column; gap: 3px; }
+  .nav {
+    display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
+    border-radius: 8px; font-size: 13px; color: var(--muted);
+  }
+  .nav svg { width: 15px; height: 15px; opacity: .75; }
+  .nav.active { background: rgba(30,42,60,.07); color: var(--ink); font-weight: 600; }
+  .sidefoot { margin-top: auto; padding: 12px 10px 4px; border-top: 1px solid rgba(30,42,60,.08); }
+  .sidefoot .row { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #30d158; box-shadow: 0 0 6px rgba(48,209,88,.5); }
+  .sidefoot .ver { font-size: 11px; color: var(--faint); margin-top: 4px; }
+
+  main { flex: 1; padding: 26px 30px 20px; display: flex; flex-direction: column; }
+  .pagehead { margin-bottom: 14px; }
+  .eyebrow { font-size: 10px; letter-spacing: 1.8px; color: var(--faint); font-weight: 600; margin-bottom: 6px; }
+  .pagehead h1 { margin: 0; font-size: 24px; letter-spacing: -.5px; font-weight: 650; }
+  .pagehead p { margin: 5px 0 0; font-size: 13px; color: var(--muted); }
+
+  .showcase {
+    position: relative; border-radius: 20px; overflow: hidden;
+    height: 812px;
+    background:
+      radial-gradient(80% 46% at 50% 6%, rgba(10,132,255,.09), transparent 60%),
+      linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+    border: 1px solid rgba(30,42,60,.08);
+    box-shadow: inset 0 1px 0 #fff, 0 18px 40px rgba(20,30,50,.08);
+  }
+  .showcase::before {
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(30,42,60,.10) 1.1px, transparent 1.1px);
+    background-size: 26px 26px; opacity: .5;
+  }
+  .phone {
+    position: absolute; left: 50%; top: 20px; height: 600px;
+    transform: translateX(-50%);
+    border-radius: 26px; border: 1px solid rgba(30,42,60,.14);
+    box-shadow: 0 30px 70px rgba(20,30,50,.22), 0 2px 8px rgba(20,30,50,.08);
+  }
+
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .wire { fill: none; stroke: rgba(40,60,90,.30); stroke-width: 1.1; }
+  .wire.hot { stroke: rgba(10,132,255,.52); }
+  .ring { fill: rgba(10,132,255,.12); stroke: rgba(10,132,255,.28); stroke-width: 1; }
+  .core { fill: var(--blue); }
+  .ring.warm { fill: rgba(201,52,0,.10); stroke: rgba(201,52,0,.24); }
+  .core.warm { fill: var(--amber); }
+
+  .callout { position: absolute; width: 206px; }
+  .callout.left { right: calc(100% - 210px); text-align: right; }
+  .callout.right { left: 614px; text-align: left; }
+  .callout .head { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
+  .callout.left .head { justify-content: flex-end; }
+  .callout .meta { margin-top: 3px; font-size: 11px; line-height: 1.5; color: var(--muted); }
+  .ico {
+    width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+    background: #fff; border: 1px solid rgba(30,42,60,.10);
+    color: #4a4a52; box-shadow: 0 1px 2px rgba(20,30,50,.06); flex: 0 0 22px;
+  }
+  .ico svg { width: 12px; height: 12px; }
+  .hot .ico { color: var(--blue); }
+  .warm .ico { color: var(--amber); }
+
+  .legend { position: absolute; left: 0; right: 0; top: 686px; height: 60px; }
+  .key { text-align: center; padding: 0 6px; }
+  .key .head { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
+  .key .meta { margin-top: 2px; font-size: 10.5px; color: var(--muted); }
+  .key .ico { width: 20px; height: 20px; border-radius: 6px; flex: 0 0 20px; }
+  .key .ico svg { width: 11px; height: 11px; }
+
+  .note { margin: 12px 2px 0; font-size: 11.5px; color: var(--faint); display: flex; gap: 7px; align-items: center; }
+</style>
+</head>
+<body>
+  <div class="window">
+    <aside>
+      <div class="brand">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round">
+            <path d="M4 12h2M8 8v8M12 4v16M16 7v10M20 10v4"/>
+          </svg>
+        </div>
+        <div><b>VibeDeck</b><span>语音控制台</span></div>
+      </div>
+      <nav>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>概览</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg>语音</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8.5" y="3" width="7" height="18" rx="3.5" transform="rotate(-25 12 12)"/><path d="M9.8 8.5l4.4 7"/></svg>闪念胶囊</div>
+        <div class="nav active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h2M11 10h2M15 10h2M7 14h2M11 14h2M15 14h2"/></svg>按键</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>统计</div>
+      </nav>
+      <div class="sidefoot">
+        <div class="row"><span class="dot"></span>VibePad 已连接</div>
+        <div class="ver">v0.4.0，本机运行</div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="pagehead">
+        <div class="eyebrow">VIBEPAD · PHONE</div>
+        <h1>按键</h1>
+        <p>触控板手势在左，按键在图例里；布局跟随左右手设置镜像。</p>
+      </div>
+
+      <div class="showcase">
+        <img class="phone" src="phone.png" alt="VibePad 主界面" />
+
+        <svg class="wires" viewBox="0 0 824 812" preserveAspectRatio="none">
+          <!-- 触控板：左侧 -->
+          <path class="wire" d="M210 168 C 262 168, 320 164, 366 164" />
+          <circle class="ring" cx="366" cy="164" r="8"/><circle class="core" cx="366" cy="164" r="2.8"/>
+          <path class="wire" d="M210 288 C 280 288, 350 218, 425 218" />
+          <circle class="ring" cx="425" cy="218" r="7"/><circle class="core" cx="425" cy="218" r="2.6"/>
+          <path class="wire" d="M210 408 C 270 408, 320 416, 366 416" />
+          <circle class="ring" cx="366" cy="416" r="7"/><circle class="core" cx="366" cy="416" r="2.6"/>
+
+          <!-- 触控板：右侧 -->
+          <path class="wire" d="M614 288 C 560 288, 500 272, 458 272" />
+          <circle class="ring" cx="458" cy="272" r="7"/><circle class="core" cx="458" cy="272" r="2.6"/>
+          <path class="wire" d="M614 408 C 560 408, 490 362, 444 362" />
+          <circle class="ring" cx="444" cy="362" r="7"/><circle class="core" cx="444" cy="362" r="2.6"/>
+          <path class="wire" d="M614 168 C 600 220, 560 404, 520 404" />
+          <circle class="ring" cx="520" cy="404" r="7"/><circle class="core" cx="520" cy="404" r="2.6"/>
+
+          <!-- 按住说话 / 确认：左右两侧 -->
+          <path class="wire hot" d="M210 470 C 280 470, 340 537, 382 537" />
+          <circle class="ring" cx="382" cy="537" r="8"/><circle class="core" cx="382" cy="537" r="2.8"/>
+          <path class="wire hot" d="M614 470 C 560 470, 520 537, 505 537" />
+          <circle class="ring" cx="505" cy="537" r="8"/><circle class="core" cx="505" cy="537" r="2.8"/>
+
+          <!-- 底部四键图例 -->
+          <path class="wire" d="M128 686 C 128 650, 300 610, 322 585" />
+          <circle class="ring" cx="322" cy="585" r="7"/><circle class="core" cx="322" cy="585" r="2.6"/>
+          <path class="wire" d="M317 686 C 317 650, 370 610, 382 585" />
+          <circle class="ring" cx="382" cy="585" r="7"/><circle class="core" cx="382" cy="585" r="2.6"/>
+          <path class="wire" d="M507 686 C 507 650, 455 610, 442 585" />
+          <circle class="ring" cx="442" cy="585" r="7"/><circle class="core" cx="442" cy="585" r="2.6"/>
+          <path class="wire" d="M696 686 C 696 650, 560 610, 502 585" />
+          <circle class="ring" cx="502" cy="585" r="7"/><circle class="core" cx="502" cy="585" r="2.6"/>
+        </svg>
+
+        <div class="callout left" style="top:146px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 12V6a1.5 1.5 0 0 1 3 0v5M11 10V4.5a1.5 1.5 0 0 1 3 0V11M14 10V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6"/></svg></span>
+            单指移动
+          </div>
+          <div class="meta">拖动 Mac 指针，速度跟随手指</div>
+        </div>
+
+        <div class="callout left" style="top:266px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/></svg></span>
+            双指滚动
+          </div>
+          <div class="meta">上下滚动页面，方向可设为自然</div>
+        </div>
+
+        <div class="callout left" style="top:386px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 12V5.5a1.5 1.5 0 0 1 3 0V11M15 9V4.5a1.5 1.5 0 0 1 3 0V13a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2.2-3.4a1.6 1.6 0 0 1 2.5-2L9 14"/></svg></span>
+            按住不动再拖
+          </div>
+          <div class="meta">按住约 0.35 秒后移动 = 左键拖拽</div>
+        </div>
+
+        <div class="callout left hot" style="top:447px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg></span>
+            按住说话
+          </div>
+          <div class="meta">按住说，松手结束</div>
+        </div>
+
+        <div class="callout right hot" style="top:447px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></span>
+            确认
+          </div>
+          <div class="meta">点按发送 Return</div>
+        </div>
+
+        <div class="callout right" style="top:266px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg></span>
+            双指横向
+          </div>
+          <div class="meta">左右滚动，横向长页面也能推</div>
+        </div>
+
+        <div class="callout right" style="top:386px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="8" y="2" width="8" height="14" rx="4"/><circle cx="12" cy="10" r="1.3"/><path d="M5 21h14"/></svg></span>
+            双指轻点
+          </div>
+          <div class="meta">右键单击，等同于触控板双指点按</div>
+        </div>
+
+        <div class="callout right" style="top:146px;">
+          <div class="head">
+            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4v16M8 8l6 4-6 4"/><path d="M20 4v16"/></svg></span>
+            边缘滚动
+          </div>
+          <div class="meta">拇指沿屏幕边缘滑动即滚动<br/>左右手自动镜像</div>
+        </div>
+
+        <!-- 底部按键图例 -->
+        <div class="legend">
+          <div class="key warm" style="position:absolute;left:62px;top:0;width:132px;">
+            <div class="head"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="9" y="3" width="6" height="18" rx="3" transform="rotate(-25 12 12)"/></svg></span>胶囊</div>
+            <div class="meta">按住录，松手存</div>
+          </div>
+          <div class="key" style="position:absolute;left:251px;top:0;width:132px;">
+            <div class="head"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M10 5h9v14h-9l-5-7z"/><path d="M13 9l4 6M17 9l-4 6"/></svg></span>删除</div>
+            <div class="meta">点按退格 · 长按清空</div>
+          </div>
+          <div class="key" style="position:absolute;left:441px;top:0;width:132px;">
+            <div class="head"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 6h10M7 12h6M7 18h10"/><path d="M15 9l3 3-3 3"/></svg></span>打断</div>
+            <div class="meta">发送 Esc</div>
+          </div>
+          <div class="key" style="position:absolute;left:630px;top:0;width:132px;">
+            <div class="head"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="7" width="12" height="10" rx="2"/><rect x="9" y="3" width="12" height="10" rx="2"/></svg></span>切换</div>
+            <div class="meta">Cmd+Tab 上一个 App</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.2"/></svg>手机是标准蓝牙 HID；切回斐讯遥控器后，原来的遥控器映射页才会生效。</div>
+    </main>
+  </div>
+</body>
+</html>

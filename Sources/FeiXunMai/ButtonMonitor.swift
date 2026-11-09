@@ -43,7 +43,7 @@ final class ButtonMonitor {
         IOHIDManagerScheduleWithRunLoop(m, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         let status = IOHIDManagerOpen(m, IOOptionBits(kIOHIDOptionsTypeNone))
         guard status == kIOReturnSuccess else {
-            NSLog("斐讯麦: HID monitor open failed (0x%x). Grant 输入监控 to see button presses.", status)
+            NSLog("VibeDeck: HID monitor open failed (0x%x). Grant 输入监控 to see button presses.", status)
             return
         }
         manager = m
@@ -101,7 +101,7 @@ final class ButtonMonitor {
                     // 消费键 0x0223/0x0224/0x0040 不会生成任何 CGEvent
                     // （macOS 只给音量/亮度等媒体键合成事件），必须在 HID 层直接派发动作
                     if let mapped = MappedButton.consumerUsage[usage] {
-                        NSLog("斐讯麦[CHAIN] HID consumer 0x%04x → apply %@", usage, mapped.rawValue)
+                        NSLog("VibeDeck[CHAIN] HID consumer 0x%04x → apply %@", usage, mapped.rawValue)
                         DispatchQueue.main.async {
                             let model = BridgeModel.shared
                             model.rulesLock.lock()

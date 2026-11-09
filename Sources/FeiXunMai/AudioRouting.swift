@@ -68,6 +68,33 @@ func outputDevices() -> [AudioDeviceInfo] {
     }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 }
 
+/// Every CoreAudio device, including input-only microphones. The previous
+/// default-input lookup went through outputDevices() and therefore returned
+/// nil for real microphones, which broke input restoration.
+func allDevices() -> [AudioDeviceInfo] {
+    var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size
+    ) == noErr, size > 0 else { return [] }
+
+    let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+    var ids = [AudioDeviceID](repeating: 0, count: count)
+    guard AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids
+    ) == noErr else { return [] }
+
+    return ids.map { id in
+        let name = audioString(id, kAudioObjectPropertyName) ?? "Unknown"
+        let uid = audioString(id, kAudioDevicePropertyDeviceUID) ?? ""
+        return AudioDeviceInfo(id: id, name: name, uid: uid)
+    }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+}
+
 func defaultOutputDevice() -> AudioDeviceInfo? {
     defaultDevice(kAudioHardwarePropertyDefaultOutputDevice)
 }
@@ -87,7 +114,7 @@ private func defaultDevice(_ selector: AudioObjectPropertySelector) -> AudioDevi
     guard AudioObjectGetPropertyData(
         AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id
     ) == noErr else { return nil }
-    return outputDevices().first { $0.id == id }
+    return allDevices().first { $0.id == id }
 }
 
 func setDefaultInputDevice(_ device: AudioDeviceInfo) -> Bool {
@@ -121,7 +148,13 @@ final class AudioSink {
     private let format: AVAudioFormat
     /// 诊断：最近 1 秒内实际流向输出设备的波形峰值（0 = 静音）
     private(set) var recentPeak: Float = 0
+    /// 给界面电平条用的平滑值，带衰减（0…1）
+    private var meter: Float = 0
     private var peakLock = NSLock()
+    /// 每秒统计：入队、丢弃、回调次数
+    private var statEnqueued = 0
+    private var statDropped = 0
+    private var statTaps = 0
 
     init(device: AudioDeviceInfo?, monitor: Bool = true) throws {
         format = AVAudioFormat(
@@ -160,6 +193,27 @@ final class AudioSink {
         try engine.start()
         player.play()
 
+        // 回读引擎真正绑定的输出设备：只报告 chosenDevice 是不够的，
+        // AUHAL 有可能忽略了 CurrentDevice 而继续用系统默认输出。
+        if let unit = engine.outputNode.audioUnit {
+            var actual: AudioDeviceID = 0
+            var actualSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+            let status = AudioUnitGetProperty(
+                unit,
+                kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global,
+                0,
+                &actual,
+                &actualSize
+            )
+            let actualName = allDevices().first { $0.id == actual }?.name ?? "id=\(actual)"
+            let outFormat = engine.outputNode.outputFormat(forBus: 0)
+            FileLog.write(
+                "sink engine device=\(actualName) status=\(status) wanted=\(device?.name ?? "系统默认")"
+                    + " outRate=\(Int(outFormat.sampleRate)) outCh=\(outFormat.channelCount)"
+            )
+        }
+
         // 监听引擎：同样的声音同时送到本机真实输出（扬声器/耳机），
         // 解决"声音全进了虚拟麦、本机没声"的问题。虚拟设备本身不监听。
         if monitor, let monitorDevice = defaultOutputDevice(),
@@ -192,6 +246,8 @@ final class AudioSink {
             }
             self.peakLock.lock()
             self.recentPeak = max(self.recentPeak, peak)
+            self.meter = max(peak, self.meter * 0.82)
+            self.statTaps += 1
             self.peakLock.unlock()
         }
     }
@@ -205,6 +261,46 @@ final class AudioSink {
         return (value, engine.isRunning)
     }
 
+    /// 界面电平条用的平滑值（不消费峰值，可随时读）。
+    var meterLevel: Float {
+        peakLock.lock()
+        let value = meter
+        peakLock.unlock()
+        return value
+    }
+
+    var isRunning: Bool { engine.isRunning }
+
+    /// 回环自检用：往当前设备灌一段 1 kHz 正弦波。
+    func playTone(seconds: Double, frequency: Float = 1_000, amplitude: Float = 0.35) {
+        let frames = AVAudioFrameCount(format.sampleRate * seconds)
+        guard frames > 0,
+              engine.isRunning,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
+              let data = buffer.floatChannelData?[0] else { return }
+        buffer.frameLength = frames
+        let rate = Float(format.sampleRate)
+        for index in 0..<Int(frames) {
+            data[index] = amplitude * sinf(2 * .pi * frequency * Float(index) / rate)
+        }
+        player.scheduleBuffer(buffer, completionHandler: nil)
+        FileLog.write(
+            "tone \(Int(frequency))Hz \(String(format: "%.1f", seconds))s → sink"
+        )
+    }
+
+    /// 每秒取一次并清零：送进播放器的缓冲数、被丢的缓冲数、mixer 回调数。
+    func takeStats() -> String {
+        peakLock.lock()
+        let line = "enq=\(statEnqueued) drop=\(statDropped) tap=\(statTaps)"
+            + " run=\(engine.isRunning ? 1 : 0) play=\(player.isPlaying ? 1 : 0)"
+        statEnqueued = 0
+        statDropped = 0
+        statTaps = 0
+        peakLock.unlock()
+        return line
+    }
+
     /// 虚拟声卡可能被静音或音量为 0，信号虽在但谁都听不到；强制拉回。
     private static func ensureAudible(_ device: AudioDeviceInfo) {
         for element in [AudioObjectPropertyElement(kAudioObjectPropertyElementMain), 1, 2] {
@@ -214,7 +310,7 @@ final class AudioSink {
                 mScope: kAudioDevicePropertyScopeOutput,
                 mElement: element
             )
-            var size = UInt32(MemoryLayout<UInt32>.size)
+            let size = UInt32(MemoryLayout<UInt32>.size)
             if AudioObjectHasProperty(device.id, &muteAddr) {
                 AudioObjectSetPropertyData(device.id, &muteAddr, 0, nil, size, &mute)
             }
@@ -224,7 +320,7 @@ final class AudioSink {
                 mScope: kAudioDevicePropertyScopeOutput,
                 mElement: element
             )
-            var volSize = UInt32(MemoryLayout<Float32>.size)
+            let volSize = UInt32(MemoryLayout<Float32>.size)
             if AudioObjectHasProperty(device.id, &volAddr) {
                 AudioObjectSetPropertyData(device.id, &volAddr, 0, nil, volSize, &volume)
             }
@@ -237,13 +333,21 @@ final class AudioSink {
               let buffer = AVAudioPCMBuffer(
                 pcmFormat: format,
                 frameCapacity: AVAudioFrameCount(samples.count)
-              ) else { return }
+              ) else {
+            peakLock.lock()
+            statDropped += 1
+            peakLock.unlock()
+            return
+        }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         guard let destination = buffer.floatChannelData?[0] else { return }
         for index in 0..<samples.count {
             destination[index] = Float(samples[index]) / 32_768.0
         }
         player.scheduleBuffer(buffer, completionHandler: nil)
+        peakLock.lock()
+        statEnqueued += 1
+        peakLock.unlock()
         if monitorActive, let copy = AVAudioPCMBuffer(
             pcmFormat: format,
             frameCapacity: AVAudioFrameCount(samples.count)

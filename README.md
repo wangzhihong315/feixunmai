@@ -1,4 +1,4 @@
-# FeiXunMai（斐讯麦）
+# FeiXunMai（VibeDeck）
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -27,9 +27,50 @@ The whole installer is about 300 KB and built entirely on Apple frameworks (Swif
 
 **Other**
 
-- Menu bar app with a native AppKit settings window.
-- Local stats only (voice count and duration); nothing leaves the Mac.
+- Menu bar app plus the VibeDeck console (Overview / Voice / Capsules / Keys / Stats).
+- Local stats only (today's voice count and duration), reset by date; nothing leaves the Mac.
 - 30-second keepalive, subscription self-check, and sleep/wake recovery, so it still answers after hours on the desk.
+
+## VibePad (Android phone)
+
+The companion app (separate `vibepad/` project) turns a phone into a trackpad plus a
+wireless microphone. The two links are independent:
+
+- **trackpad** — the phone registers as a standard Bluetooth HID mouse/keyboard, so the
+  Mac needs no client at all;
+- **voice** — a dedicated BLE GATT service (`7A1B0001-…`) streams 8 kHz ADPCM, which the
+  Mac decodes into FeiXunV 2ch.
+
+Gestures:
+
+| Gesture | Action |
+|---|---|
+| One-finger move / tap | Move pointer / left click |
+| Two-finger swipe | Scroll (natural direction, matching macOS) |
+| Two-finger tap | Right click |
+| Hold still ~0.35 s, then move | Press and drag (no double-tap drag) |
+| Two-finger horizontal | Scroll sideways |
+| Edge scroll | Same side as the holding hand, mirrored for left-handed use |
+
+Control bar: `确认` = Enter (send / allow a permission prompt), `打断` = Esc (interrupt the
+current generation), `胶囊` = hold to record an idea capsule, `删除` / `切换` send Backspace /
+Cmd+Tab, plus a hold-to-talk key. Right-handed layout is `[voice][confirm][interrupt]`;
+left-handed mirrors it.
+
+Measured voice-path facts:
+
+- the BLE link carries about **4 KB/s** (macOS settles on a 50–60 ms connection interval
+  and one packet per event), so the wire format is 8 kHz / 40 ms / 160 B ADPCM at
+  25 packets/s — just inside the budget, with no loss;
+- capture uses `VOICE_COMMUNICATION` (system AGC + noise suppression);
+  `VOICE_RECOGNITION` is attenuated to −43 dBFS on MIUI and is unusable;
+- every session switches the system default input **before** pressing the trigger key
+  (input methods grab the device at that instant) and then **rebuilds the AudioSink**,
+  because changing the default input invalidates the old output binding — the engine
+  keeps running with a live mixer level while the virtual device receives nothing.
+
+Diagnostics: all voice events go to `~/Library/Logs/VibeDeck.log`, and the “声音路由” card
+has “麦克风自检”, “回环自检 1kHz” and “录虚拟麦” buttons for checking each segment.
 
 ## Requirements
 
@@ -48,7 +89,7 @@ The whole installer is about 300 KB and built entirely on Apple frameworks (Swif
 Build from source:
 
 ```zsh
-./scripts/build-app.sh   # produces dist/斐讯麦.app, zip, dmg and the combined pkg
+./scripts/build-app.sh   # produces dist/VibeDeck.app, zip, dmg and the combined pkg
 ```
 
 ## How it works
@@ -87,3 +128,16 @@ No network access, no uploads. Audio is decoded and routed locally; statistics s
 - [google/libsbc](https://github.com/google/libsbc): mSBC decoding (Apache-2.0).
 
 **Special thanks to [Wireless Mic SayAll (HD838A/remote-mic-app)](https://github.com/HD838A/remote-mic-app).** The product idea, the arm-then-suppress HID architecture, the "trigger follows the audio stream, not the key event" timing, the audio wiring order that fixed our silent virtual mic, and much of the debugging map came from its public documentation and its 343-entry bug archive. If this project helps you, give SayAll a star too.
+
+
+## Idea Capsules (VibePad)
+
+Hold the **Capsule** key on the phone, say a thought, release: the phone records a WAV locally.
+When connected, it uploads over a dedicated Wi-Fi channel. Once the Mac has had about 8 seconds
+without keyboard or mouse input, it transcribes automatically: switch the default input, rebuild
+the virtual audio sink, hold the voice key, play the recording into FeiXunV, and let Doubao type
+the text into a small HUD panel. The text is written back to the capsule and pushed to the phone.
+
+If you touch the keyboard or mouse during transcription it aborts immediately, keeps the capsule
+pending, and restores focus. The Mac's Capsules page is a sticky-note grid with manual transcription
+and a folder shortcut. A read-only MCP server exposes the capsules to agents.

@@ -48,14 +48,21 @@ final class BridgeModel: NSObject, ObservableObject {
     @Published var autoSwitchInput: Bool {
         didSet { UserDefaults.standard.set(autoSwitchInput, forKey: "autoSwitchInput") }
     }
+    /// 当前语音来源：斐讯遥控器 / 手机 BLE。默认遥控器，保证零回归。
+    @Published var voiceSource: VoiceSource {
+        didSet {
+            UserDefaults.standard.set(voiceSource.rawValue, forKey: "voiceSource")
+            if !isStarting { applyVoiceSource() }
+        }
+    }
     @Published var monitorEnabled: Bool {
         didSet {
             UserDefaults.standard.set(monitorEnabled, forKey: "monitorEnabled")
             restartSink()
         }
     }
-    private var savedInputDevice: AudioDeviceInfo?
     private var activityToken: NSObjectProtocol?
+    private var isStarting = false
     let keepAliveLock = NSLock()
     var lastKeepAlive = Date.distantPast
     /// tap 线程读取的事件规则快照（主线程写，锁保护）
@@ -88,7 +95,6 @@ final class BridgeModel: NSObject, ObservableObject {
     private var target: CBPeripheral?
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
-    private var sink: AudioSink?
     private let decoder = msbc_new()
     private var voiceActiveInternal = false
     /// 按键模拟挂在音频流上并设最短时长门槛（E1 实测：点按也有 ~0.2 s 毛刺流，
@@ -123,11 +129,20 @@ final class BridgeModel: NSObject, ObservableObject {
         todayVoiceCount = defaults.integer(forKey: "voiceCount")
         todayVoiceSeconds = defaults.double(forKey: "voiceSeconds")
         todayKey = Self.dayKey()
+        // 以前只存了累计值没存"哪一天"，重启后会把历史总数当成今日数据。
+        if defaults.string(forKey: "statsDayKey") != todayKey {
+            todayVoiceCount = 0
+            todayVoiceSeconds = 0
+            defaults.set(0, forKey: "voiceCount")
+            defaults.set(0.0, forKey: "voiceSeconds")
+        }
+        defaults.set(todayKey, forKey: "statsDayKey")
         arrowsAsMouse = defaults.bool(forKey: "arrowsAsMouse")
         autoSwitchInput = defaults.object(forKey: "autoSwitchInput") as? Bool ?? true
         monitorEnabled = defaults.object(forKey: "monitorEnabled") as? Bool ?? false
         let rawMappings = defaults.dictionary(forKey: "buttonMappings") as? [String: String] ?? [:]
         mappings = rawMappings.compactMapValues { KeyAction(rawValue: $0) }
+        voiceSource = VoiceSource(rawValue: defaults.string(forKey: "voiceSource") ?? "") ?? .remote
         super.init()
         normalizeDailyStats()
     }
@@ -136,34 +151,27 @@ final class BridgeModel: NSObject, ObservableObject {
         // 禁止 AppNap：后台时主线程被挂起会导致切回前台头几秒点击全部丢失
         activityToken = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiatedAllowingIdleSystemSleep],
-            reason: "斐讯麦持续监听遥控器"
+            reason: "VibeDeck持续监听遥控器"
         )
-        if Diag.on { NSLog("斐讯麦[diag] chosen device: %@", chosenDevice()?.name ?? "系统默认") }
+        if Diag.on { NSLog("VibeDeck[diag] chosen device: %@", chosenDevice()?.name ?? "系统默认") }
         if voiceKeyMode != .none {
-            // 首次运行时让系统自动弹出"斐讯麦想控制你的电脑"授权弹窗
+            // 首次运行时让系统自动弹出"VibeDeck想控制你的电脑"授权弹窗
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
         }
+        isStarting = true
         refreshDevices()
         // 启动自愈：上次会话若没来得及还原系统输入（崩溃/强退），现在补上
-        if UserDefaults.standard.string(forKey: "savedInputDeviceUID") != nil {
-            switchDefaultInput(toBlackHole: false)
-        }
-        // 一次性迁移：老配置存的 BlackHole → 迁到 FeiXunV（豆包识别友好）
-        if selectedDeviceUID.contains("BlackHole"),
-           let feixunv = audioDevices.first(where: { $0.name.contains("FeiXunV") }) {
-            selectedDeviceUID = feixunv.uid
-            NSLog("斐讯麦[MIGRATE] output → FeiXunV")
-        }
+        SystemInputSwitcher.shared.restoreIfNeeded()
+        // 这里曾经有一段"BlackHole → FeiXunV"的强制迁移。它每次启动都会
+        // 覆盖用户选择的输出设备，导致 FeiXunV 的回灌若有问题就永远切不
+        // 回 BlackHole。设备选择交给用户/下拉框，不再自动改写。
         updateEventRules()
-        do {
-            sink = try AudioSink(device: chosenDevice(), monitor: monitorEnabled)
-            if Diag.on { NSLog("斐讯麦[diag] sink started → %@", chosenDevice()?.name ?? "系统默认") }
-        } catch {
-            if Diag.on { NSLog("斐讯麦[diag] sink FAILED at start: %@", String(describing: error)) }
-            sink = nil
-        }
-        central = CBCentralManager(delegate: self, queue: .main)
+        AudioSinkRouter.shared.configure(device: chosenDevice(), monitor: monitorEnabled)
+        isStarting = false
+        applyVoiceSource()
+        VoiceTCPServer.shared.start()
+        CapsuleTranscriber.shared.start()
         buttonMonitor.start()
         KeyInterceptor.shared.start()
         startWatchdog()
@@ -178,6 +186,7 @@ final class BridgeModel: NSObject, ObservableObject {
             if interceptorActive != tapNow {
                 interceptorActive = tapNow
             }
+            VoiceTCPServer.shared.sendStatus()
             // 蓝牙重启/回连后 notify 订阅会静默失效（界面仍显示已连接），
             // 定期检查并补订，否则语音流永远收不到
             if let target = self.target,
@@ -185,7 +194,7 @@ final class BridgeModel: NSObject, ObservableObject {
                let notify = self.notifyCharacteristic,
                !notify.isNotifying {
                 target.setNotifyValue(true, for: notify)
-                NSLog("斐讯麦[SUB] notify resubscribed")
+                NSLog("VibeDeck[SUB] notify resubscribed")
             }
             // 保活：遥控器会把语音通道空闲后自行关闭，定期重发开麦命令
             if let target = self.target,
@@ -202,6 +211,9 @@ final class BridgeModel: NSObject, ObservableObject {
                     packet.append(Data(repeating: 0, count: 17))
                     target.writeValue(packet, for: write, type: .withoutResponse)
                 }
+            }
+            if self.voiceSource == .phone {
+                PhoneAudioBridge.shared.publishStatus()
             }
         }
         timer.tolerance = 1.0
@@ -230,15 +242,76 @@ final class BridgeModel: NSObject, ObservableObject {
     }
 
     private func restartSink() {
-        sink?.stop()
-        let device = chosenDevice()
-        do {
-            sink = try AudioSink(device: device, monitor: monitorEnabled)
-            if Diag.on { NSLog("斐讯麦[diag] sink rebuilt → %@ monitor=%d", device?.name ?? "系统默认", monitorEnabled ? 1 : 0) }
-        } catch {
-            if Diag.on { NSLog("斐讯麦[diag] sink FAILED for %@: %@", device?.name ?? "系统默认", String(describing: error)) }
-            sink = nil
+        if isStarting { return }
+        AudioSinkRouter.shared.rebuild(device: chosenDevice(), monitor: monitorEnabled)
+    }
+
+    /// Applies the selected voice source without touching the remote path when
+    /// the phone is active, and vice versa.
+    private func applyVoiceSource() {
+        switch voiceSource {
+        case .phone:
+            stopRemoteCentral()
+            PhoneAudioBridge.shared.start()
+            NSLog("VibeDeck[source] phone")
+        case .remote:
+            PhoneAudioBridge.shared.stop()
+            startRemoteCentral()
+            NSLog("VibeDeck[source] remote")
         }
+    }
+
+    private func startRemoteCentral() {
+        if let central {
+            if central.state == .poweredOn {
+                connectionState = .searching
+                central.scanForPeripherals(
+                    withServices: nil,
+                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+                )
+            }
+        } else {
+            connectionState = .searching
+            central = CBCentralManager(delegate: self, queue: .main)
+        }
+    }
+
+    /// User-initiated reconnect for the physical remote. Keeps the remote
+    /// path independent from the phone bridge.
+    func rescanRemote() {
+        guard voiceSource == .remote else { return }
+        rescanWork?.cancel()
+        central?.stopScan()
+        if let target {
+            central?.cancelPeripheralConnection(target)
+        }
+        target = nil
+        writeCharacteristic = nil
+        notifyCharacteristic = nil
+        voiceActiveInternal = false
+        sessionFirstAudio = nil
+        keySent = false
+        gateBuffer.removeAll()
+        connectionState = .searching
+        startRemoteCentral()
+    }
+
+    private func stopRemoteCentral() {
+        if voiceActiveInternal || voiceActive {
+            closeSession()
+        }
+        central?.stopScan()
+        if let target {
+            central?.cancelPeripheralConnection(target)
+        }
+        target = nil
+        writeCharacteristic = nil
+        notifyCharacteristic = nil
+        voiceActiveInternal = false
+        sessionFirstAudio = nil
+        keySent = false
+        gateBuffer.removeAll()
+        connectionState = .idle
     }
 
     // MARK: - Stats
@@ -249,23 +322,31 @@ final class BridgeModel: NSObject, ObservableObject {
         return formatter.string(from: Date())
     }
 
-    private func normalizeDailyStats() {
+    func normalizeDailyStats() {
         let key = Self.dayKey()
-        if key != todayKey {
-            todayKey = key
-            todayVoiceCount = 0
-            todayVoiceSeconds = 0
-        }
+        guard key != todayKey else { return }
+        todayKey = key
+        todayVoiceCount = 0
+        todayVoiceSeconds = 0
+        UserDefaults.standard.set(0, forKey: "voiceCount")
+        UserDefaults.standard.set(0.0, forKey: "voiceSeconds")
+        UserDefaults.standard.set(key, forKey: "statsDayKey")
     }
 
     private func finishVoiceSession() {
         guard let start = sessionStart else { return }
+        recordVoiceSession(seconds: Date().timeIntervalSince(start))
+        sessionStart = nil
+    }
+
+    /// Shared by the remote and phone paths.
+    func recordVoiceSession(seconds: Double) {
         normalizeDailyStats()
         todayVoiceCount += 1
-        todayVoiceSeconds += Date().timeIntervalSince(start)
+        todayVoiceSeconds += seconds
         UserDefaults.standard.set(todayVoiceCount, forKey: "voiceCount")
         UserDefaults.standard.set(todayVoiceSeconds, forKey: "voiceSeconds")
-        sessionStart = nil
+        UserDefaults.standard.set(todayKey, forKey: "statsDayKey")
     }
 }
 
@@ -321,7 +402,9 @@ extension BridgeModel: CBCentralManagerDelegate, CBPeripheralDelegate {
         didDisconnectPeripheral peripheral: CBPeripheral,
         error: Error?
     ) {
-        endVoice()
+        // 断连必须走完整收尾：否则输入不还原、gateBuffer 残留，
+        // 重连后第一段音频会被旧状态污染。
+        closeSession()
         scheduleRescan()
     }
 
@@ -413,7 +496,7 @@ extension BridgeModel: CBCentralManagerDelegate, CBPeripheralDelegate {
         // 07 fc 01 … = 按下，07 fc 07 … = 松开。按键模拟等音频流过门槛才触发。
         if data.count >= 3, data[0] == 0x07, data[1] == 0xfc {
             let active = data[2] == 0x01
-            if Diag.on { NSLog("斐讯麦[diag] ctrl %@", active ? "start" : "stop") }
+            if Diag.on { NSLog("VibeDeck[diag] ctrl %@", active ? "start" : "stop") }
             voiceActiveInternal = active
             if !active { closeSession() }
             return
@@ -437,12 +520,12 @@ extension BridgeModel: CBCentralManagerDelegate, CBPeripheralDelegate {
             }
         }
 
-        if Diag.on { NSLog("斐讯麦[diag] audio packet: %d samples, keySent=%d, buffer=%d", decodedSamples.count, keySent ? 1 : 0, gateBuffer.count) }
+        if Diag.on { NSLog("VibeDeck[diag] audio packet: %d samples, keySent=%d, buffer=%d", decodedSamples.count, keySent ? 1 : 0, gateBuffer.count) }
         guard !decodedSamples.isEmpty else { return }
         lastAudioDate = Date()
 
         if keySent {
-            sink?.enqueue(decodedSamples)
+            AudioSinkRouter.shared.enqueue(decodedSamples)
             return
         }
         // 门槛期：缓存样本，流持续满 0.4 s 才触发语音键模拟
@@ -451,42 +534,34 @@ extension BridgeModel: CBCentralManagerDelegate, CBPeripheralDelegate {
         if let first = sessionFirstAudio,
            Date().timeIntervalSince(first) >= 0.4 {
             keySent = true
-            if Diag.on { NSLog("斐讯麦[diag] gate passed → press key, flush %d chunks", gateBuffer.count) }
+            if Diag.on { NSLog("VibeDeck[diag] gate passed → press key, flush %d chunks", gateBuffer.count) }
             beginVoice()
-            for chunk in gateBuffer { sink?.enqueue(chunk) }
+            for chunk in gateBuffer { AudioSinkRouter.shared.enqueue(chunk) }
             gateBuffer.removeAll()
         }
     }
 
-    /// 语音会话期间把系统默认输入切到 BlackHole，结束时还原真实麦克风。
+    /// 语音会话期间把系统默认输入切到虚拟麦克风，结束时还原真实麦克风。
+    /// 切换由 SystemInputSwitcher 统一做引用计数，手机来源结束不会把遥控器
+    /// 还在使用的虚拟输入提前还原。
     private func switchDefaultInput(toBlackHole: Bool) {
-        guard autoSwitchInput else { return }
         if toBlackHole {
-            guard savedInputDevice == nil,
-                  let virtual = audioDevices.first(where: { $0.name.contains("FeiXunV") })
-                      ?? audioDevices.first(where: { $0.name.localizedCaseInsensitiveContains("BlackHole") }),
-                  virtual != defaultInputDevice() else { return }
-            savedInputDevice = defaultInputDevice()
-            UserDefaults.standard.set(savedInputDevice?.uid, forKey: "savedInputDeviceUID")
-            if setDefaultInputDevice(virtual) {
-                if Diag.on { NSLog("斐讯麦[diag] default input → %@ (was %@)", virtual.name, savedInputDevice?.name ?? "?") }
-            }
+            guard autoSwitchInput, let target = virtualInputDevice() else { return }
+            SystemInputSwitcher.shared.begin(owner: .remote, target: target)
         } else {
-            // 优先用持久化记录（应用重启后内存值会丢），其次内存值
-            let savedUID = UserDefaults.standard.string(forKey: "savedInputDeviceUID")
-                ?? savedInputDevice?.uid
-            guard let savedUID,
-                  let restore = audioDevices.first(where: { $0.uid == savedUID }) else { return }
-            _ = setDefaultInputDevice(restore)
-            if Diag.on { NSLog("斐讯麦[diag] default input restored → %@", restore.name) }
-            savedInputDevice = nil
-            UserDefaults.standard.removeObject(forKey: "savedInputDeviceUID")
+            // 还原不受 autoSwitchInput 当前值影响：用户中途取消勾选也要还原。
+            SystemInputSwitcher.shared.end(owner: .remote)
         }
+    }
+
+    private func virtualInputDevice() -> AudioDeviceInfo? {
+        audioDevices.first { $0.name.localizedCaseInsensitiveContains("FeiXunV") }
+            ?? audioDevices.first { $0.name.localizedCaseInsensitiveContains("BlackHole") }
     }
 
     /// 会话收尾：没过门槛的（点按毛刺）静默丢弃；过了门槛的正常收尾。
     private func closeSession() {
-        if Diag.on { NSLog("斐讯麦[diag] session closed, keySent=%d, buffered=%d", keySent ? 1 : 0, gateBuffer.count) }
+        if Diag.on { NSLog("VibeDeck[diag] session closed, keySent=%d, buffered=%d", keySent ? 1 : 0, gateBuffer.count) }
         voiceActiveInternal = false
         sessionFirstAudio = nil
         gateBuffer.removeAll()
@@ -514,6 +589,9 @@ extension BridgeModel: CBCentralManagerDelegate, CBPeripheralDelegate {
     private func beginVoice() {
         voiceActive = true
         sessionStart = Date()
+        // 先切输入，再按下语音键：否则目标应用会在真实麦克风上开始监听，
+        // 前几个字直接丢失。这是 F1 的修复点。
+        switchDefaultInput(toBlackHole: true)
         voiceKeyDriver.voiceStarted()
     }
 
@@ -521,19 +599,24 @@ extension BridgeModel: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard voiceActive else { return }
         voiceActive = false
         voiceKeyDriver.voiceStopped()
+        // 等 0.35 s 尾音排空后再还原真实麦克风，避免最后一个字被掐掉。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.switchDefaultInput(toBlackHole: false)
+        }
         finishVoiceSession()
     }
 
     func shutdown() {
-        if savedInputDevice != nil
-            || UserDefaults.standard.string(forKey: "savedInputDeviceUID") != nil {
-            switchDefaultInput(toBlackHole: false)
-        }
+        PhoneAudioBridge.shared.stop()
+        // 同步释放 Fn/⌘，不能等 VoiceKeyDriver 的 0.35 s 延迟任务：
+        // App 退出时主队列可能不再执行，修饰键会卡在按下状态。
+        voiceKeyDriver.forceRelease()
+        SystemInputSwitcher.shared.restoreIfNeeded()
         // 注意：不要发 08 06 00（关麦）——遥控器会锁存关麦状态，
         // 导致下次启动后语音键不推流。保持开麦即可。
         if let target {
             central?.cancelPeripheralConnection(target)
         }
-        sink?.stop()
+        AudioSinkRouter.shared.shutdown()
     }
 }

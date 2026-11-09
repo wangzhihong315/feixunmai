@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh_CN</string>
 	<key>CFBundleDisplayName</key>
-	<string>斐讯麦</string>
+	<string>VibeDeck</string>
 	<key>CFBundleExecutable</key>
 	<string>FeiXunMai</string>
 	<key>CFBundleIdentifier</key>
@@ -13,23 +13,27 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>斐讯麦</string>
+	<string>VibeDeck</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.0</string>
+	<string>0.5.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VibeDeck 通过麦克风自检确认虚拟声卡是否真的在传递手机语音。</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>连接斐讯遥控器并接收它的语音数据。</string>
+	<string>VibeDeck 连接 VibePad 或遥控器并接收语音数据。</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>连接斐讯遥控器并接收它的语音数据。</string>
+	<string>VibeDeck 连接 VibePad 或遥控器并接收语音数据。</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026. 自用项目。</string>
 </dict>

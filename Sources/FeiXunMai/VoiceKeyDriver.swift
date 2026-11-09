@@ -58,6 +58,7 @@ final class VoiceKeyDriver {
     /// false = 按住期间保持按下（配长按式语音工具）。
     var tapToggle: Bool
     private var pendingEnd: DispatchWorkItem?
+    private var keyDown = false
 
     init(mode: VoiceKeyMode, tapToggle: Bool) {
         self.mode = mode
@@ -71,12 +72,17 @@ final class VoiceKeyDriver {
     func voiceStarted() {
         pendingEnd?.cancel()
         pendingEnd = nil
-        if Diag.on { NSLog("斐讯麦[diag] voiceStarted mode=%@ AX=%d", mode.rawValue, AXIsProcessTrusted() ? 1 : 0) }
-        guard let keyCode = mode.keyCode else { return }
+        if Diag.on { NSLog("VibeDeck[diag] voiceStarted mode=%@ AX=%d", mode.rawValue, AXIsProcessTrusted() ? 1 : 0) }
+        guard let keyCode = mode.keyCode else {
+            FileLog.write("key none (mode=\(mode.rawValue))")
+            return
+        }
+        FileLog.write("key down \(keyCode) mode=\(mode.rawValue) AX=\(AXIsProcessTrusted() ? 1 : 0)")
         if tapToggle {
             tap(keyCode)
         } else {
             post(keyCode, down: true)
+            keyDown = true
         }
     }
 
@@ -89,12 +95,25 @@ final class VoiceKeyDriver {
                 self.tap(keyCode)
             } else {
                 self.post(keyCode, down: false)
+                self.keyDown = false
             }
+            FileLog.write("key up \(keyCode) mode=\(self.mode.rawValue)")
             self.pendingEnd = nil
         }
         pendingEnd?.cancel()
         pendingEnd = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    /// Releases a held modifier immediately. Used on disconnect, source
+    /// switch, and app exit, where the 0.35 s delayed keyUp may never run.
+    func forceRelease() {
+        pendingEnd?.cancel()
+        pendingEnd = nil
+        guard keyDown, let keyCode = mode.keyCode else { return }
+        keyDown = false
+        post(keyCode, down: false)
+        FileLog.write("key force up \(keyCode)")
     }
 
     private func tap(_ keyCode: CGKeyCode) {

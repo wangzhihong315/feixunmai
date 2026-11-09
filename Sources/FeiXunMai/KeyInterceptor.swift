@@ -134,7 +134,7 @@ final class KeyInterceptor {
     func start() {
         // 隔离实验开关：defaults write com.feixun.mai disableInterceptor -bool YES
         if UserDefaults.standard.bool(forKey: "disableInterceptor") {
-            NSLog("斐讯麦[diag] interceptor DISABLED by switch")
+            NSLog("VibeDeck[diag] interceptor DISABLED by switch")
             return
         }
         let mask: CGEventMask =
@@ -155,7 +155,7 @@ final class KeyInterceptor {
             return
         }
         self.tap = tap
-        NSLog("斐讯麦[BOOT] tap created, AX=%d, mapping mode on", AXIsProcessTrusted() ? 1 : 0)
+        NSLog("VibeDeck[BOOT] tap created, AX=%d, mapping mode on", AXIsProcessTrusted() ? 1 : 0)
         // 关键：tap 必须挂在专用线程的 RunLoop 上。挂主线程的话，
         // 应用在后台被 AppNap 挂起时，切回前台的头几秒事件全被吞掉。
         tapRunLoopThread = Thread { [weak self] in
@@ -245,11 +245,11 @@ final class KeyInterceptor {
             let state = (data1 & 0xFF00) >> 8
             let isDown = state == 0x0A
             let armed = isArmedConsumer(usage)
-            NSLog("斐讯麦[CHAIN] tap systemDefined usage=0x%04x down=%d armed=%d", usage, isDown ? 1 : 0, armed ? 1 : 0)
+            NSLog("VibeDeck[CHAIN] tap systemDefined usage=0x%04x down=%d armed=%d", usage, isDown ? 1 : 0, armed ? 1 : 0)
             guard armed, let button = MappedButton.consumerUsage[usage] else {
                 return Unmanaged.passUnretained(event)
             }
-            NSLog("斐讯麦[CHAIN] apply %@ isDown=%d", button.rawValue, isDown ? 1 : 0)
+            NSLog("VibeDeck[CHAIN] apply %@ isDown=%d", button.rawValue, isDown ? 1 : 0)
             apply(button: button, isDown: isDown, rules: rules)
             return nil
         }

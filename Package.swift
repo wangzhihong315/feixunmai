@@ -15,5 +15,9 @@ let package = Package(
             dependencies: ["CSBC"],
             path: "Sources/FeiXunMai"
         ),
+        .executableTarget(
+            name: "VibeDeckMCP",
+            path: "Sources/VibeDeckMCP"
+        ),
     ]
 )

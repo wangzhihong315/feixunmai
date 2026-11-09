@@ -1,4 +1,7 @@
-# 斐讯麦（FeiXunMai）
+# VibeDeck（FeiXunMai）
+
+> Mac 端显示名已从“斐讯麦”改为 **VibeDeck**；手机端为 **VibePad**。内部可执行文件和 bundle id 保留 `FeiXunMai` / `com.feixun.mai`，避免重新授权辅助功能与蓝牙。
+
 
 [English](README.md) · **简体中文**
 
@@ -11,7 +14,7 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 无任何第三方 Swift 依赖。本项目深受 [无线麦 SayAll（remote-mic-app）](https://github.com/HD838A/remote-mic-app)
 启发，多项关键设计直接参考其公开文档与踩坑记录（见下方致谢）。
 
-![斐讯麦设置界面](docs/screenshot.png)
+![VibeDeck设置界面](docs/screenshot.png)
 
 ## 功能
 
@@ -29,9 +32,53 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 - 语音键的 F5 回声自动吞掉，不会误触系统听写或其他语音工具。
 
 **其他**
-- 菜单栏常驻 + 设置窗口（纯 AppKit，原生标签页）；
-- 本地统计（语音次数/时长），不上传任何数据；
+- 菜单栏常驻 + VibeDeck 控制台（概览 / 语音 / 闪念胶囊 / 按键 / 统计）；
+- 本地统计（今日语音次数/时长），按日期自动重置，不上传任何数据；
 - 语音通道 30 秒保活 + 订阅自检 + 睡眠唤醒自愈，长期待机也能即按即说。
+
+## VibePad（Android 手机端）
+
+配套 App（独立工程 `vibepad/`），把手机变成触控板 + 无线麦克风。两个连接互相独立：
+
+- **触控板**：手机注册为标准蓝牙 HID 鼠标/键盘，Mac 端零客户端；
+- **语音**：手机自建 BLE GATT 服务（`7A1B0001-…`），音频经 8 kHz ADPCM 送到 Mac，
+  解码后写入 FeiXunV 2ch。
+
+手势：
+
+| 手势 | 行为 |
+|---|---|
+| 单指移动 / 轻点 | 移动指针 / 左键 |
+| 双指滑动 | 滚动（自然滚动，方向与 macOS 一致） |
+| 双指轻点 | 右键 |
+| 按住不动约 0.35 s 再移动 | 按下左键拖动（不做双击拖动） |
+| 双指横向 | 左右滚动 |
+| 边缘滚动 | 与持机手同侧，左右手镜像 |
+
+控制条：`确认` = Enter（发送 / 允许权限），`打断` = Esc（中断生成），`胶囊` = 按住录一条闪念，
+`删除` / `切换` 分别发送 Backspace / Cmd+Tab；语音键按住说话。右手模式为 `[语音键][确认][打断]`，
+左手整体镜像。
+
+**闪念胶囊**
+
+- 手机端按住「胶囊」只录音，松手存本地 WAV；连上 Mac 后走独立的 Wi-Fi 同步通道上传；
+- Mac 连续约 8 秒没有键鼠输入时自动转写：切系统默认输入 → 重建虚拟声卡 → 按住语音键，
+  把录音播进 FeiXunV，由豆包把文字打进顶部小窗，再写回胶囊并同步给手机；
+- 转写期间检测到真实键鼠输入会立刻中断并回滚，胶囊保持待转写，不抢用户焦点；
+- Mac 的胶囊页是便签网格，可查看/手动转写/打开存储目录；另附只读 MCP 服务供 Agent 读取。
+
+语音链路的实测硬指标：
+
+- BLE 链路吞吐约 **4 KB/s**（macOS 把连接间隔放在 50~60 ms，每周期只发一个包），
+  所以线上格式定为 8 kHz / 40 ms / 160 B ADPCM、25 包/秒，刚好不丢包；
+- 手机采集用 `VOICE_COMMUNICATION`（系统 AGC + 降噪）；`VOICE_RECOGNITION` 在 MIUI 上
+  会被衰减到 -43 dBFS，等于静音；
+- 每次语音开始时**先切系统默认输入、再按触发键**（输入法在按键瞬间取设备），
+  且切换后必须**重建 AudioSink**——切默认输入会让旧输出绑定失效，表现为
+  "引擎 running、mixer 有电平，但虚拟声卡收不到"。
+
+诊断：Mac 端语音事件全部写入 `~/Library/Logs/VibeDeck.log`；界面「声音路由」卡片里有
+「麦克风自检」「回环自检 1kHz」「录虚拟麦」三个按钮，可逐段验证链路。
 
 ## 硬件与系统要求
 
@@ -41,7 +88,7 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 
 ## 安装
 
-1. 从 [Releases](../../releases/latest) 下载 `FeiXunMai-0.3.0.pkg`（内含 斐讯麦.app + FeiXunV 2ch + BlackHole 2ch 两个虚拟声卡）；
+1. 从 [Releases](../../releases/latest) 下载 `FeiXunMai-0.3.0.pkg`（内含 VibeDeck.app + FeiXunV 2ch + BlackHole 2ch 两个虚拟声卡）；
 2. 安装包未做签名公证：右键点安装包选「打开」；若仍被拦，去「系统设置 → 隐私与安全性」放行；
 3. 允许「蓝牙」权限；
 4. 语音应用的麦克风设为 **“自动 / 跟随系统默认”**（不要固定选某个设备）；
@@ -50,7 +97,7 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 构建（可选，从源码）：
 
 ```zsh
-./scripts/build-app.sh    # 产出 dist/斐讯麦.app、zip、dmg 和总安装包 pkg
+./scripts/build-app.sh    # 产出 dist/VibeDeck.app、zip、dmg 和总安装包 pkg
 ```
 
 ## 工作原理
@@ -108,3 +155,32 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
   并提示了豆包需要专属 USB transport 虚拟声卡的方向。
 
 如果本项目对你有用，也请给 [无线麦 SayAll](https://github.com/HD838A/remote-mic-app) 一个 Star。
+
+
+## 闪念胶囊 MCP
+
+Mac 端自带一个只读 MCP 服务器，把手机同步过来的闪念胶囊交给 Agent：
+
+```bash
+# 可执行文件
+dist/VibeDeckMCP
+```
+
+工具：`list_capsules`（最近胶囊，可只看待转写）、`search_capsules`（按关键词搜索转写文本）、`get_capsule`（按 id 取完整文本与音频路径）。
+
+客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "vibedeck-capsules": {
+      "command": "/绝对路径/feixunmai/dist/VibeDeckMCP",
+      "args": []
+    }
+  }
+}
+```
+
+自测：`python3 -I scripts/test-mcp.py dist/VibeDeckMCP`。详细说明见 `docs/MCP.md`。
+
+接入各种 Agent（ZCode / Claude Code / Codex / Qwen Code / WorkBuddy）的配置见 `docs/MCP-CLIENTS.md`。

@@ -1,12 +1,13 @@
 #!/bin/zsh
-# Build 斐讯麦 (FeiXunMai.app) and package it.
+# Build VibeDeck and package it. The executable remains FeiXunMai so the
+# existing bundle identifier and macOS permissions keep working.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BUILD_DIR=".build/release-app"
-APP_NAME="斐讯麦.app"
+APP_NAME="VibeDeck.app"
 APP_DIR="dist/$APP_NAME"
-VERSION="0.3.0"
+VERSION="0.5.0"
 
 echo "==> swift build (release)"
 swift build -c release
@@ -15,8 +16,11 @@ echo "==> assembling $APP_DIR"
 rm -rf dist "$BUILD_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp Info.plist "$APP_DIR/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
+cp Resources/PhoneShowcase.png "$APP_DIR/Contents/Resources/PhoneShowcase.png"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cp .build/release/FeiXunMai "$APP_DIR/Contents/MacOS/FeiXunMai"
+cp .build/release/VibeDeckMCP "$APP_DIR/Contents/MacOS/VibeDeckMCP"
 
 echo "==> codesign"
 if security find-identity -v -p codesigning | grep -q "FeiXunMai Dev"; then
@@ -25,14 +29,17 @@ else
   codesign --force --deep -s - "$APP_DIR"
 fi
 
+cp .build/release/VibeDeckMCP dist/VibeDeckMCP
+
 echo "==> zip"
 cd dist
-zip -qry "斐讯麦-$VERSION.zip" "$APP_NAME"
+zip -qry "VibeDeck-$VERSION.zip" "$APP_NAME"
 cd ..
 
 echo "==> dmg"
-hdiutil create -volname "斐讯麦" -srcfolder dist/"$APP_NAME" -ov -format UDZO "dist/斐讯麦-$VERSION.dmg" >/dev/null
+hdiutil create -volname "VibeDeck" -srcfolder dist/"$APP_NAME" -ov -format UDZO "dist/VibeDeck-$VERSION.dmg" >/dev/null
 
+if [[ -d driver/FeiXunV2ch.driver ]]; then
 echo "==> combined installer pkg (app + BlackHole 2ch)"
 rm -rf /tmp/feixunmai-pkgroot /tmp/bhroot /tmp/bhscripts /tmp/pkgpath
 mkdir -p /tmp/feixunmai-pkgroot/Applications "/tmp/bhroot/Library/Audio/Plug-Ins/HAL" /tmp/bhscripts
@@ -68,7 +75,10 @@ mkdir -p /tmp/pkgpath
 cp vendor/BlackHole2ch-driver.pkg vendor/FeiXunV2ch-driver.pkg /tmp/feixunmai-core.pkg /tmp/pkgpath/
 cp vendor/BlackHole-full/Resources/LICENSE /tmp/pkgpath/BlackHole-LICENSE.txt
 productbuild --distribution /tmp/distribution.dist --package-path /tmp/pkgpath \
-  "dist/斐讯麦安装包-$VERSION.pkg" >/dev/null
+  "dist/VibeDeck-$VERSION.pkg" >/dev/null
+else
+  echo "==> skip installer pkg: driver/FeiXunV2ch.driver not found"
+fi
 
 echo "==> done"
 ls -lh dist

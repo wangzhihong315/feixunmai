@@ -3,20 +3,12 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private var settings: SettingsWindowController?
-    private var refreshTimer: Timer?
+    private var deckWindow: VibeDeckWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         BridgeModel.shared.start()
-        settings = SettingsWindowController()
         setupStatusItem()
         showMainWindow()
-        // 界面状态同步（1s 轮询，仅更新有变化的原生控件，无 SwiftUI 重绘开销）
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.settings?.syncConnectionTab()
-            self?.settings?.syncMappingTab()
-            self?.settings?.syncStats()
-        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -29,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "斐讯麦")
+        item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "VibeDeck")
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
@@ -37,31 +29,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showMainWindow() {
-        settings?.showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
+        if deckWindow == nil {
+            deckWindow = VibeDeckWindowController()
+        }
+        deckWindow?.showWindow(nil)
+        deckWindow?.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    var window: NSWindow? { settings?.window }
+    var window: NSWindow? { deckWindow?.window }
 }
 
 extension AppDelegate: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
         let model = BridgeModel.shared
+        let phone = PhoneAudioBridge.shared
+        let primary = model.voiceSource == .phone
+            ? "VibePad：\(phone.stateText)"
+            : "遥控器：\(model.connectionState.rawValue)"
         let status = NSMenuItem(
-            title: "状态：\(model.connectionState.rawValue)\(model.voiceActive ? "（说话中）" : "")",
+            title: "状态：\(primary)\(model.voiceActive ? "（说话中）" : "")",
             action: nil,
             keyEquivalent: ""
         )
         status.isEnabled = false
         menu.addItem(status)
         menu.addItem(.separator())
-        let open = NSMenuItem(title: "打开主面板", action: #selector(showPanel), keyEquivalent: ",")
+        let open = NSMenuItem(title: "打开控制台", action: #selector(showPanel), keyEquivalent: ",")
         open.target = self
         menu.addItem(open)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "退出斐讯麦", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "退出 VibeDeck", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
     }
 

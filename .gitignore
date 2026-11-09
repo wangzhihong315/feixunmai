@@ -4,3 +4,9 @@ dist/
 *.log
 Phicomm-remote-photo.jpg
 driver/FeiXunV2ch.driver/
+vibepad/app/build/
+vibepad/.gradle/
+vibepad/.kotlin/
+vibepad/.idea/
+vibepad/local.properties
+vibepad/.DS_Store
