@@ -130,6 +130,24 @@ No network access, no uploads. Audio is decoded and routed locally; statistics s
 **Special thanks to [Wireless Mic SayAll (HD838A/remote-mic-app)](https://github.com/HD838A/remote-mic-app).** The product idea, the arm-then-suppress HID architecture, the "trigger follows the audio stream, not the key event" timing, the audio wiring order that fixed our silent virtual mic, and much of the debugging map came from its public documentation and its 343-entry bug archive. If this project helps you, give SayAll a star too.
 
 
+## Building from source
+
+macOS 13+ with Xcode Command Line Tools:
+
+```bash
+./scripts/build-app.sh
+# outputs: dist/VibeDeck.app, dist/VibeDeck-0.5.0.zip / .dmg, dist/VibeDeckMCP
+```
+
+The Android app needs JDK 21 and the Android SDK:
+
+```bash
+cd vibepad
+echo "sdk.dir=/path/to/Android/sdk" > local.properties
+./gradlew assembleDebug
+# output: app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## Idea Capsules (VibePad)
 
 Hold the **Capsule** key on the phone, say a thought, release: the phone records a WAV locally.

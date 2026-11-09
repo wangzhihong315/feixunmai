@@ -157,6 +157,24 @@ OpenAI × Work Louder 的 [Codex Micro](https://worklouder.cc/codex-micro) 的�
 如果本项目对你有用，也请给 [无线麦 SayAll](https://github.com/HD838A/remote-mic-app) 一个 Star。
 
 
+## 从源码构建
+
+macOS 13+，安装 Xcode Command Line Tools：
+
+```bash
+./scripts/build-app.sh
+# 产物：dist/VibeDeck.app、dist/VibeDeck-0.5.0.zip / .dmg、dist/VibeDeckMCP
+```
+
+Android 端需要 JDK 21 + Android SDK：
+
+```bash
+cd vibepad
+echo "sdk.dir=/path/to/Android/sdk" > local.properties
+./gradlew assembleDebug
+# 产物：app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## 闪念胶囊 MCP
 
 Mac 端自带一个只读 MCP 服务器，把手机同步过来的闪念胶囊交给 Agent：
